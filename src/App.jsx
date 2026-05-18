@@ -678,20 +678,47 @@ function NewSale({ state, setState, setPage, session }) {
         </div>
 
         <div className="product-list">
-          {filteredProducts.map((p) => (
-            <button className="product-card" key={p.id} onClick={() => addToCart(p)}>
-              <div>
-                <b>{p.name}</b>
-                <span>{p.category} · {p.sku}</span>
-              </div>
+  {filteredProducts.map((p) => (
+    <button
+      className="product-card premium-product-card"
+      key={p.id}
+      onClick={() => addToCart(p)}
+    >
+      <div className="product-card-left">
+        <img
+          src={
+            p.image ||
+"https://placehold.co/120x120/111/FFF?text=Mate"
+          }
+          alt={p.name}
+          className="product-thumb"
+        />
 
-              <div className="product-price">
-                <b>{money(p.salePrice)}</b>
-                <span className={p.stock <= p.minStock ? "danger-text" : ""}>Stock {p.stock}</span>
-              </div>
-            </button>
-          ))}
+        <div className="product-data">
+          <b>{p.name}</b>
+
+          <span>
+            {p.category} · {p.sku}
+          </span>
+
+          <small
+            className={
+              p.stock <= p.minStock
+                ? "danger-text"
+                : ""
+            }
+          >
+            Stock disponible: {p.stock}
+          </small>
         </div>
+      </div>
+
+      <div className="product-price">
+        <b>{money(p.salePrice)}</b>
+      </div>
+    </button>
+  ))}
+</div>
       </Card>
 
       <Card title="Resumen de venta">
@@ -748,42 +775,53 @@ function NewSale({ state, setState, setPage, session }) {
       const stockLow = i.stock <= i.minStock;
 
       return (
-        <div className="cart-item" key={i.id}>
-          <div className="cart-info">
-            <b>{i.name}</b>
+  <div className="cart-item" key={i.id}>
+    <div className="cart-info">
+      <img
+        src={
+          i.image ||
+          "https://placehold.co/100x100/111/FFF?text=Mate"
+        }
+        alt={i.name}
+        className="cart-thumb"
+      />
 
-            <span>
-              {money(i.salePrice)} c/u · SKU: {i.sku}
-            </span>
+      <div>
+        <b>{i.name}</b>
 
-            <small className={stockLow ? "danger-text" : ""}>
-              Stock disponible: {i.stock}
-            </small>
-          </div>
+        <span>
+          {money(i.salePrice)} c/u · SKU: {i.sku}
+        </span>
 
-          <div className="cart-actions">
-            <input
-              type="number"
-              min="1"
-              max={i.stock}
-              value={i.qty}
-              onChange={(e) => updateQty(i.id, e.target.value)}
-            />
+        <small className={stockLow ? "danger-text" : ""}>
+          Stock disponible: {i.stock}
+        </small>
+      </div>
+    </div>
 
-            <b>{money(i.salePrice * i.qty)}</b>
+    <div className="cart-actions">
+      <input
+        type="number"
+        min="1"
+        max={i.stock}
+        value={i.qty}
+        onChange={(e) => updateQty(i.id, e.target.value)}
+      />
 
-            <button
-              className="danger-btn"
-              onClick={() =>
-                setCart(cart.filter((x) => x.id !== i.id))
-              }
-            >
-              <Trash2 size={18} />
-            </button>
-          </div>
-        </div>
-      );
-    })
+      <b>{money(i.salePrice * i.qty)}</b>
+
+      <button
+        className="danger-btn"
+        onClick={() =>
+          setCart(cart.filter((x) => x.id !== i.id))
+        }
+      >
+        <Trash2 size={18} />
+      </button>
+    </div>
+  </div>
+);
+})
   ) : (
     <Empty text="Agregá productos desde el buscador." />
   )}
@@ -1624,7 +1662,9 @@ function Products({ state, setState, canAdmin }) {
       setForm({
         ...form,
         imageFile: e.target.files[0],
-        imagePreview: URL.createObjectURL(e.target.files[0]),
+        imagePreview: e.target.files[0]
+  ? URL.createObjectURL(e.target.files[0])
+  : "",
       })
     }
   />
