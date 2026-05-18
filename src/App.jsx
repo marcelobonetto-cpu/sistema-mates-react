@@ -1557,6 +1557,9 @@ function Products({ state, setState, canAdmin }) {
 
   const [form, setForm] = useState(emptyProduct);
   const [query, setQuery] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("Todos");
+  const [sortBy, setSortBy] = useState("name");
+  const [lowStockOnly, setLowStockOnly] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [editForm, setEditForm] = useState(emptyProduct);
 
@@ -1764,15 +1767,42 @@ function Products({ state, setState, canAdmin }) {
     }
   }
 
-  const products = state.products.filter(
-    (p) =>
-      p.active !== false &&
-      (
-        p.name.toLowerCase().includes(query.toLowerCase()) ||
-        p.category.toLowerCase().includes(query.toLowerCase()) ||
-        p.sku.toLowerCase().includes(query.toLowerCase())
-      )
-  );
+  const products = state.products
+  .filter((p) => p.active !== false)
+
+  .filter((p) =>
+    p.name.toLowerCase().includes(query.toLowerCase()) ||
+    p.category.toLowerCase().includes(query.toLowerCase()) ||
+    p.sku.toLowerCase().includes(query.toLowerCase())
+  )
+
+  .filter((p) =>
+    categoryFilter === "Todos"
+      ? true
+      : p.category === categoryFilter
+  )
+
+  .filter((p) =>
+    lowStockOnly
+      ? p.stock <= p.minStock
+      : true
+  )
+
+  .sort((a, b) => {
+    switch (sortBy) {
+      case "price-high":
+        return b.salePrice - a.salePrice;
+
+      case "price-low":
+        return a.salePrice - b.salePrice;
+
+      case "stock":
+        return b.stock - a.stock;
+
+      default:
+        return a.name.localeCompare(b.name);
+    }
+  });
 
   return (
     <section className={`page ${canAdmin ? "two-columns small-left" : ""}`}>
@@ -1876,14 +1906,47 @@ function Products({ state, setState, canAdmin }) {
       )}
 
       <Card title="Productos">
-        <div className="search-box">
-          <Search size={18} />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar producto..."
-          />
-        </div>
+       <div className="products-toolbar">
+
+  <div className="search-box">
+    <Search size={18} />
+
+    <input
+      value={query}
+      onChange={(e) => setQuery(e.target.value)}
+      placeholder="Buscar producto..."
+    />
+  </div>
+
+  <select
+    value={categoryFilter}
+    onChange={(e) => setCategoryFilter(e.target.value)}
+  >
+    <option value="Todos">Todas las categorías</option>
+
+    {categories.map((c) => (
+      <option key={c}>{c}</option>
+    ))}
+  </select>
+
+  <select
+    value={sortBy}
+    onChange={(e) => setSortBy(e.target.value)}
+  >
+    <option value="name">Ordenar por nombre</option>
+    <option value="price-high">Mayor precio</option>
+    <option value="price-low">Menor precio</option>
+    <option value="stock">Mayor stock</option>
+  </select>
+
+  <button
+    className={lowStockOnly ? "primary-btn" : "secondary-btn"}
+    onClick={() => setLowStockOnly(!lowStockOnly)}
+  >
+    Stock bajo
+  </button>
+
+</div>
 
         <div className="product-table">
           {products.map((p) => (
