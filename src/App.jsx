@@ -1,5 +1,6 @@
 import { supabase } from "./lib/supabase.js";
 import React, { useEffect, useMemo, useState } from "react";
+import toast, { Toaster } from "react-hot-toast";
 import {
   AlertTriangle,
   BarChart3,
@@ -255,6 +256,19 @@ function login(username, password) {
   const isSuperAdmin = session.role === "superadmin";
 
   return (
+  <>
+    <Toaster
+      position="bottom-right"
+      toastOptions={{
+        style: {
+          background: "#111",
+          color: "#fff",
+          border: "1px solid #2a2a2a",
+          borderRadius: "14px",
+        },
+      }}
+    />
+
     <div className="app-shell">
       <aside className={`sidebar ${sidebarOpen ? "open" : ""}`}>
         <div className="brand">
@@ -315,7 +329,8 @@ function login(username, password) {
         {page === "users" && canAdmin && <UsersAdmin state={state} setState={setState} isSuperAdmin={isSuperAdmin} />}
       </main>
     </div>
-  );
+  </>
+);
 }
 
 function LoginScreen({ onLogin }) {
@@ -384,8 +399,7 @@ function Dashboard({ state, setPage }) {
     [state]
   );
 
-  const topProducts = getTopProducts(activeSales).slice(0, 5);
-  const recentSales = activeSales.slice(0, 6);
+  const recentSales = activeSales.slice(0, 5);
 
   const lowStock = activeProducts.filter(
     (p) => Number(p.stock) <= Number(p.minStock)
@@ -401,26 +415,78 @@ function Dashboard({ state, setPage }) {
 
   const cashBalance = cashIncome - cashExpense;
 
+  const topProducts = getTopProducts(activeSales).slice(0, 5);
+
+  const bestClient = activeSales.reduce((acc, sale) => {
+    const current = acc[sale.clientName] || 0;
+    acc[sale.clientName] = current + Number(sale.total || 0);
+    return acc;
+  }, {});
+
+  const bestClientName =
+    Object.entries(bestClient).sort((a, b) => b[1] - a[1])[0]?.[0] ||
+    "Sin datos";
+
   return (
-    <section className="page">
+    <section className="page dashboard-premium">
+      <div className="dashboard-hero">
+        <div>
+          <span className="eyebrow">Resumen general</span>
+          <h1>Panel principal</h1>
+          <p>Vista rápida de ventas, caja, stock y rendimiento del negocio.</p>
+        </div>
+
+        <button className="primary-btn" onClick={() => setPage("new-sale")}>
+          <Plus size={18} /> Nueva venta
+        </button>
+      </div>
+
       <div className="stats-grid">
         <StatCard icon={<CircleDollarSign />} label="Ventas del día" value={money(summary.todaySales)} />
         <StatCard icon={<Wallet />} label="Total cobrado" value={money(summary.totalPaid)} />
-        <StatCard icon={<CreditCard />} label="Pendiente de cobrar" value={money(summary.totalDebt)} danger={summary.totalDebt > 0} />
+        <StatCard icon={<CreditCard />} label="Pendiente" value={money(summary.totalDebt)} danger={summary.totalDebt > 0} />
         <StatCard icon={<BarChart3 />} label="Caja / Balance" value={money(cashBalance)} danger={cashBalance < 0} />
       </div>
 
-      <div className="grid-3">
+      <div className="dashboard-grid">
         <Card title="Últimas ventas" action={<button onClick={() => setPage("sales")}>Ver todo</button>}>
-          {recentSales.length ? recentSales.map((s) => <SaleMini key={s.id} sale={s} />) : <Empty text="Todavía no cargaste ventas." />}
+          {recentSales.length ? (
+            recentSales.map((s) => <SaleMini key={s.id} sale={s} />)
+          ) : (
+            <Empty text="Todavía no cargaste ventas." />
+          )}
         </Card>
 
         <Card title="Productos más vendidos">
-          {topProducts.length ? topProducts.map(([name, qty]) => <LineItem key={name} left={name} right={`${qty} u.`} />) : <Empty text="Sin datos todavía." />}
+          {topProducts.length ? (
+            topProducts.map(([name, qty]) => (
+              <LineItem key={name} left={name} right={`${qty} u.`} />
+            ))
+          ) : (
+            <Empty text="Sin datos todavía." />
+          )}
         </Card>
 
-        <Card title="Alertas importantes">
-          {lowStock.length ? lowStock.map((p) => <LineItem key={p.id} left={p.name} right={`Stock ${p.stock}`} danger />) : <Empty text="No hay productos con stock bajo." />}
+        <Card title="Alertas de stock">
+          {lowStock.length ? (
+            lowStock.map((p) => (
+              <LineItem
+                key={p.id}
+                left={p.name}
+                right={`Stock ${p.stock}`}
+                danger
+              />
+            ))
+          ) : (
+            <Empty text="No hay productos con stock bajo." />
+          )}
+        </Card>
+
+        <Card title="Cliente destacado">
+          <div className="featured-box">
+            <span>Mayor comprador</span>
+            <b>{bestClientName}</b>
+          </div>
         </Card>
       </div>
     </section>
@@ -457,13 +523,14 @@ function NewSale({ state, setState, setPage, session }) {
   const debt = Math.max(total - paid, 0);
 
   function addToCart(product) {
-    if (product.active === false) return alert("Este producto está desactivado.");
-    if (product.stock <= 0) return alert("Este producto no tiene stock.");
+    if (product.active === false) return toast.error("Este producto está desactivado.");
+    if (product.stock <= 0) 
+return toast.error("Este producto no tiene stock.");
 
     const existing = cart.find((i) => i.id === product.id);
 
     if (existing) {
-      if (existing.qty >= product.stock) return alert("No hay más stock disponible.");
+      if (existing.qty >= product.stock) return toast.error("No hay más stock disponible.");
       setCart(cart.map((i) => i.id === product.id ? { ...i, qty: i.qty + 1 } : i));
     } else {
       setCart([...cart, { ...product, qty: 1 }]);
@@ -480,13 +547,13 @@ function NewSale({ state, setState, setPage, session }) {
 
   async function registerSale() {
     try {
-      if (!cart.length) return alert("Agregá al menos un producto.");
-      if (!clientId) return alert("Seleccioná un cliente.");
+      if (!cart.length) return toast.error("Agregá al menos un producto.");
+      if (!clientId) return toast.error("Seleccioná un cliente.");
 
       const client = state.clients.find((c) => c.id === Number(clientId));
 
       if (!client || client.active === false) {
-        alert("El cliente seleccionado no está activo.");
+        toast.error("El cliente seleccionado no está activo.");
         return;
       }
 
@@ -662,10 +729,10 @@ function NewSale({ state, setState, setPage, session }) {
       setShippingCost("");
       setPage("sales");
 
-      alert("Venta guardada correctamente");
+      toast.success("Venta guardada correctamente");
     } catch (err) {
       console.error("ERROR GENERAL VENTA:", err);
-      alert("Error general guardando la venta");
+      toast.error("Error general guardando la venta");
     }
   }
 
@@ -957,10 +1024,10 @@ function Sales({ state, setState }) {
       }),
     }));
 
-    alert("Venta eliminada y stock devuelto correctamente");
+    toast.success("Venta eliminada y stock devuelto correctamente");
   } catch (err) {
     console.error("ERROR GENERAL ELIMINANDO VENTA:", err);
-    alert("Error general eliminando venta");
+    toast.error("Error general eliminando venta");
   }
 }
 
@@ -1015,11 +1082,13 @@ function Clients({ state, setState }) {
 
   const [form, setForm] = useState(emptyClient);
   const [query, setQuery] = useState("");
+  const [editingClient, setEditingClient] = useState(null);
+  const [editClientForm, setEditClientForm] = useState(emptyClient);
 
   async function saveClient() {
     try {
       if (!form.name.trim()) {
-        alert("El cliente necesita nombre.");
+        toast.error("El cliente necesita nombre.");
         return;
       }
 
@@ -1041,7 +1110,7 @@ function Clients({ state, setState }) {
 
       if (error) {
         console.error("ERROR SUPABASE CLIENTE:", error);
-        alert(error.message);
+        toast.error(error.message);
         return;
       }
 
@@ -1064,65 +1133,84 @@ function Clients({ state, setState }) {
 
       setForm(emptyClient);
 
-      alert("Cliente guardado correctamente");
+      toast.success("Cliente guardado correctamente");
     } catch (err) {
       console.error("ERROR GENERAL CLIENTE:", err);
-      alert("Error general guardando cliente");
+      toast.error("Error general guardando cliente");
     }
   }
 
-  async function editClient(client) {
-    try {
-      const nuevoNombre = prompt("Nombre del cliente:", client.name);
-      if (!nuevoNombre) return;
+  function editClient(client) {
+    setEditingClient(client);
 
-      const nuevoTelefono = prompt("Teléfono:", client.phone || "") || "";
-      const nuevoInstagram = prompt("Instagram:", client.instagram || "") || "";
-      const nuevaLocalidad = prompt("Localidad:", client.city || "") || "";
-      const nuevaDireccion = prompt("Dirección:", client.address || "") || "";
-      const nuevasObservaciones = prompt("Observaciones:", client.notes || "") || "";
+    setEditClientForm({
+      name: client.name || "",
+      phone: client.phone || "",
+      instagram: client.instagram || "",
+      city: client.city || "",
+      address: client.address || "",
+      notes: client.notes || "",
+      tags: client.tags?.join(", ") || "",
+    });
+  }
+
+  async function saveEditClient() {
+    try {
+      if (!editingClient) return;
+
+      if (!editClientForm.name.trim()) {
+        toast.error("El cliente necesita nombre.");
+        return;
+      }
 
       const clienteActualizado = {
-        nombre: nuevoNombre,
-        telefono: nuevoTelefono,
-        instagram: nuevoInstagram,
-        localidad: nuevaLocalidad,
-        direccion: nuevaDireccion,
-        observaciones: nuevasObservaciones,
+        nombre: editClientForm.name,
+        telefono: editClientForm.phone,
+        instagram: editClientForm.instagram,
+        localidad: editClientForm.city,
+        direccion: editClientForm.address,
+        observaciones: editClientForm.notes,
       };
 
       const { error } = await supabase
         .from("clientes")
         .update(clienteActualizado)
-        .eq("id", client.id);
+        .eq("id", editingClient.id);
 
       if (error) {
         console.error("ERROR EDITANDO CLIENTE:", error);
-        alert(error.message);
+        toast.error(error.message);
         return;
       }
 
       setState((prev) => ({
         ...prev,
         clients: prev.clients.map((c) =>
-          c.id === client.id
+          c.id === editingClient.id
             ? {
                 ...c,
-                name: nuevoNombre,
-                phone: nuevoTelefono,
-                instagram: nuevoInstagram,
-                city: nuevaLocalidad,
-                address: nuevaDireccion,
-                notes: nuevasObservaciones,
+                name: editClientForm.name,
+                phone: editClientForm.phone,
+                instagram: editClientForm.instagram,
+                city: editClientForm.city,
+                address: editClientForm.address,
+                notes: editClientForm.notes,
+                tags: editClientForm.tags
+                  .split(",")
+                  .map((x) => x.trim())
+                  .filter(Boolean),
               }
             : c
         ),
       }));
 
-      alert("Cliente actualizado correctamente");
+      setEditingClient(null);
+      setEditClientForm(emptyClient);
+
+      toast.success("Cliente actualizado correctamente");
     } catch (err) {
       console.error("ERROR GENERAL EDITANDO CLIENTE:", err);
-      alert("Error general editando cliente");
+      toast.error("Error general editando cliente");
     }
   }
 
@@ -1141,23 +1229,21 @@ function Clients({ state, setState }) {
 
       if (error) {
         console.error("ERROR DESACTIVANDO CLIENTE:", error);
-        alert(error.message);
+        toast.error(error.message);
         return;
       }
 
       setState((prev) => ({
         ...prev,
         clients: prev.clients.map((c) =>
-          c.id === client.id
-            ? { ...c, active: false }
-            : c
+          c.id === client.id ? { ...c, active: false } : c
         ),
       }));
 
-      alert("Cliente desactivado correctamente");
+      toast.success("Cliente desactivado correctamente");
     } catch (err) {
       console.error("ERROR GENERAL DESACTIVANDO CLIENTE:", err);
-      alert("Error general desactivando cliente");
+      toast.error("Error general desactivando cliente");
     }
   }
 
@@ -1254,33 +1340,49 @@ function Clients({ state, setState }) {
             );
 
             return (
-              <div className="client-card" key={c.id}>
-                <div>
-                  <b>{c.name}</b>
+              <div className="client-card premium-client-card" key={c.id}>
+                <div className="client-top">
+                  <div className="client-avatar">
+                    {c.name.charAt(0).toUpperCase()}
+                  </div>
 
-                  <span>
-                    {c.phone || "Sin teléfono"}{" "}
-                    {c.instagram ? `· ${c.instagram}` : ""}
-                  </span>
+                  <div className="client-main">
+                    <b>{c.name}</b>
 
-                  <span>{c.city}</span>
+                    <span>{c.phone || "Sin teléfono"}</span>
+
+                    {c.instagram && (
+                      <span>@{c.instagram.replace("@", "")}</span>
+                    )}
+
+                    <small>{c.city || "Sin localidad"}</small>
+                  </div>
                 </div>
 
-                <div className="client-numbers">
-                  <span>Compró: {money(totalBought)}</span>
+                <div className="client-stats">
+                  <div className="client-stat">
+                    <small>Compras</small>
+                    <b>{clientSales.length}</b>
+                  </div>
 
-                  <b
-                    className={
-                      debt > 0
-                        ? "danger-text"
-                        : "success-text"
-                    }
-                  >
-                    {debt > 0
-                      ? `Debe ${money(debt)}`
-                      : "Sin deuda"}
-                  </b>
+                  <div className="client-stat">
+                    <small>Total gastado</small>
+                    <b>{money(totalBought)}</b>
+                  </div>
+
+                  <div className="client-stat">
+                    <small>Deuda</small>
+                    <b className={debt > 0 ? "danger-text" : "success-text"}>
+                      {debt > 0 ? money(debt) : "Sin deuda"}
+                    </b>
+                  </div>
                 </div>
+
+                {clientSales.length > 0 && (
+                  <div className="client-last-sale">
+                    Última compra: <b>{money(clientSales[0]?.total || 0)}</b>
+                  </div>
+                )}
 
                 <div className="badges">
                   {c.tags?.map((t) => (
@@ -1288,7 +1390,18 @@ function Clients({ state, setState }) {
                   ))}
                 </div>
 
-                <div style={{ display: "flex", gap: "8px" }}>
+                <div className="client-actions">
+                  {c.phone && (
+                    <a
+                      href={`https://wa.me/${c.phone.replace(/\D/g, "")}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="whatsapp-btn"
+                    >
+                      WhatsApp
+                    </a>
+                  )}
+
                   <button
                     className="secondary-btn"
                     onClick={() => editClient(c)}
@@ -1308,6 +1421,123 @@ function Clients({ state, setState }) {
           })}
         </div>
       </Card>
+
+      {editingClient && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-head">
+              <h2>Editar cliente</h2>
+
+              <button
+                className="icon-btn"
+                onClick={() => setEditingClient(null)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="form-grid">
+              <Field label="Nombre y apellido">
+                <input
+                  value={editClientForm.name}
+                  onChange={(e) =>
+                    setEditClientForm({
+                      ...editClientForm,
+                      name: e.target.value,
+                    })
+                  }
+                />
+              </Field>
+
+              <Field label="Teléfono">
+                <input
+                  value={editClientForm.phone}
+                  onChange={(e) =>
+                    setEditClientForm({
+                      ...editClientForm,
+                      phone: e.target.value,
+                    })
+                  }
+                />
+              </Field>
+
+              <Field label="Instagram">
+                <input
+                  value={editClientForm.instagram}
+                  onChange={(e) =>
+                    setEditClientForm({
+                      ...editClientForm,
+                      instagram: e.target.value,
+                    })
+                  }
+                />
+              </Field>
+
+              <Field label="Localidad">
+                <input
+                  value={editClientForm.city}
+                  onChange={(e) =>
+                    setEditClientForm({
+                      ...editClientForm,
+                      city: e.target.value,
+                    })
+                  }
+                />
+              </Field>
+
+              <Field label="Dirección">
+                <input
+                  value={editClientForm.address}
+                  onChange={(e) =>
+                    setEditClientForm({
+                      ...editClientForm,
+                      address: e.target.value,
+                    })
+                  }
+                />
+              </Field>
+
+              <Field label="Etiquetas">
+                <input
+                  value={editClientForm.tags}
+                  onChange={(e) =>
+                    setEditClientForm({
+                      ...editClientForm,
+                      tags: e.target.value,
+                    })
+                  }
+                  placeholder="VIP, frecuente, debe dinero"
+                />
+              </Field>
+            </div>
+
+            <Field label="Observaciones">
+              <textarea
+                value={editClientForm.notes}
+                onChange={(e) =>
+                  setEditClientForm({
+                    ...editClientForm,
+                    notes: e.target.value,
+                  })
+                }
+              />
+            </Field>
+
+            <div className="modal-actions">
+              <button
+                className="secondary-btn"
+                onClick={() => setEditingClient(null)}
+              >
+                Cancelar
+              </button>
+
+              <button className="primary-btn" onClick={saveEditClient}>
+                Guardar cambios
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -1327,32 +1557,35 @@ function Products({ state, setState, canAdmin }) {
 
   const [form, setForm] = useState(emptyProduct);
   const [query, setQuery] = useState("");
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [editForm, setEditForm] = useState(emptyProduct);
+
   async function uploadImage(file) {
-  if (!file) return "";
+    if (!file) return "";
 
-  const fileName = `${Date.now()}-${file.name}`;
+    const fileName = `${Date.now()}-${file.name}`;
 
-  const { error } = await supabase.storage
-    .from("productos")
-    .upload(fileName, file);
+    const { error } = await supabase.storage
+      .from("productos")
+      .upload(fileName, file);
 
-  if (error) {
-    console.error(error);
-    alert("Error subiendo imagen");
-    return "";
+    if (error) {
+      console.error("ERROR STORAGE:", error);
+      toast.error(error.message);
+      return "";
+    }
+
+    const { data } = supabase.storage
+      .from("productos")
+      .getPublicUrl(fileName);
+
+    return data.publicUrl;
   }
-
-  const { data } = supabase.storage
-    .from("productos")
-    .getPublicUrl(fileName);
-
-  return data.publicUrl;
-}
 
   async function saveProduct() {
     try {
       if (!form.name.trim()) {
-        alert("El producto necesita nombre.");
+        toast.error("El producto necesita nombre.");
         return;
       }
 
@@ -1372,7 +1605,7 @@ function Products({ state, setState, canAdmin }) {
         precio_costo: Number(form.costPrice || 0),
         stock: Number(form.stock || 0),
         stock_minimo: Number(form.minStock || 0),
-        sku: sku,
+        sku,
         imagen_url: imageUrl,
         activo: true,
       };
@@ -1385,7 +1618,7 @@ function Products({ state, setState, canAdmin }) {
 
       if (error) {
         console.error("ERROR SUPABASE:", error);
-        alert(error.message);
+        toast.error(error.message);
         return;
       }
 
@@ -1400,6 +1633,7 @@ function Products({ state, setState, canAdmin }) {
         minStock: Number(data.stock_minimo),
         sku: data.sku,
         image: data.imagen_url,
+        description: form.description || "",
         active: data.activo,
       };
 
@@ -1410,89 +1644,90 @@ function Products({ state, setState, canAdmin }) {
 
       setForm(emptyProduct);
 
-      alert("Producto guardado correctamente");
-
+      toast.success("Producto guardado correctamente");
     } catch (err) {
       console.error("ERROR GENERAL:", err);
-      alert("Error general revisá consola");
+      toast.error("Error general revisá consola");
     }
   }
 
-  async function editProduct(product) {
+  function editProduct(product) {
+    setEditingProduct(product);
+
+    setEditForm({
+      name: product.name || "",
+      category: product.category || "Línea Oro",
+      line: product.line || "Premium",
+      salePrice: product.salePrice || "",
+      costPrice: product.costPrice || "",
+      stock: product.stock || "",
+      minStock: product.minStock || 2,
+      description: product.description || "",
+      image: product.image || "",
+      imageFile: null,
+      imagePreview: product.image || "",
+    });
+  }
+
+  async function saveEditProduct() {
     try {
-      const nuevoNombre = prompt(
-        "Nombre del producto:",
-        product.name
-      );
+      if (!editingProduct) return;
 
-      if (!nuevoNombre) return;
+      let imageUrl = editForm.image || "";
 
-      const nuevoPrecioVenta = Number(
-        prompt("Precio de venta:", product.salePrice)
-      );
-
-      const nuevoPrecioCosto = Number(
-        prompt("Precio de costo:", product.costPrice)
-      );
-
-      const nuevoStock = Number(
-        prompt("Stock:", product.stock)
-      );
-
-      const nuevoStockMinimo = Number(
-        prompt("Stock mínimo:", product.minStock)
-      );
-
-      if (
-        Number.isNaN(nuevoPrecioVenta) ||
-        Number.isNaN(nuevoPrecioCosto) ||
-        Number.isNaN(nuevoStock) ||
-        Number.isNaN(nuevoStockMinimo)
-      ) {
-        alert("Los valores deben ser números válidos.");
-        return;
+      if (editForm.imageFile) {
+        imageUrl = await uploadImage(editForm.imageFile);
       }
 
       const productoActualizado = {
-        nombre: nuevoNombre,
-        precio_venta: nuevoPrecioVenta,
-        precio_costo: nuevoPrecioCosto,
-        stock: nuevoStock,
-        stock_minimo: nuevoStockMinimo,
+        nombre: editForm.name,
+        categoria: editForm.category,
+        linea: editForm.line,
+        precio_venta: Number(editForm.salePrice || 0),
+        precio_costo: Number(editForm.costPrice || 0),
+        stock: Number(editForm.stock || 0),
+        stock_minimo: Number(editForm.minStock || 0),
+        imagen_url: imageUrl,
       };
 
       const { error } = await supabase
         .from("productos")
         .update(productoActualizado)
-        .eq("id", product.id);
+        .eq("id", editingProduct.id);
 
       if (error) {
         console.error("ERROR EDITANDO PRODUCTO:", error);
-        alert(error.message);
+        toast.error(error.message);
         return;
       }
 
       setState((prev) => ({
         ...prev,
         products: prev.products.map((p) =>
-          p.id === product.id
+          p.id === editingProduct.id
             ? {
                 ...p,
-                name: nuevoNombre,
-                salePrice: nuevoPrecioVenta,
-                costPrice: nuevoPrecioCosto,
-                stock: nuevoStock,
-                minStock: nuevoStockMinimo,
+                name: editForm.name,
+                category: editForm.category,
+                line: editForm.line,
+                salePrice: Number(editForm.salePrice || 0),
+                costPrice: Number(editForm.costPrice || 0),
+                stock: Number(editForm.stock || 0),
+                minStock: Number(editForm.minStock || 0),
+                description: editForm.description || "",
+                image: imageUrl,
               }
             : p
         ),
       }));
 
-      alert("Producto actualizado correctamente");
+      setEditingProduct(null);
+      setEditForm(emptyProduct);
 
+      toast.success("Producto actualizado correctamente");
     } catch (err) {
       console.error("ERROR GENERAL EDITANDO PRODUCTO:", err);
-      alert("Error general editando producto");
+      toast.error("Error general editando producto");
     }
   }
 
@@ -1511,24 +1746,21 @@ function Products({ state, setState, canAdmin }) {
 
       if (error) {
         console.error("ERROR DESACTIVANDO PRODUCTO:", error);
-        alert(error.message);
+        toast.error(error.message);
         return;
       }
 
       setState((prev) => ({
         ...prev,
         products: prev.products.map((p) =>
-          p.id === product.id
-            ? { ...p, active: false }
-            : p
+          p.id === product.id ? { ...p, active: false } : p
         ),
       }));
 
-      alert("Producto desactivado correctamente");
-
+      toast.success("Producto desactivado correctamente");
     } catch (err) {
       console.error("ERROR GENERAL DESACTIVANDO PRODUCTO:", err);
-      alert("Error general desactivando producto");
+      toast.error("Error general desactivando producto");
     }
   }
 
@@ -1549,18 +1781,14 @@ function Products({ state, setState, canAdmin }) {
           <Field label="Nombre">
             <input
               value={form.name}
-              onChange={(e) =>
-                setForm({ ...form, name: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
           </Field>
 
           <Field label="Categoría">
             <select
               value={form.category}
-              onChange={(e) =>
-                setForm({ ...form, category: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, category: e.target.value })}
             >
               {categories.map((c) => (
                 <option key={c}>{c}</option>
@@ -1571,9 +1799,7 @@ function Products({ state, setState, canAdmin }) {
           <Field label="Línea">
             <input
               value={form.line}
-              onChange={(e) =>
-                setForm({ ...form, line: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, line: e.target.value })}
             />
           </Field>
 
@@ -1582,12 +1808,7 @@ function Products({ state, setState, canAdmin }) {
               <input
                 type="number"
                 value={form.salePrice}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    salePrice: e.target.value,
-                  })
-                }
+                onChange={(e) => setForm({ ...form, salePrice: e.target.value })}
               />
             </Field>
 
@@ -1595,12 +1816,7 @@ function Products({ state, setState, canAdmin }) {
               <input
                 type="number"
                 value={form.costPrice}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    costPrice: e.target.value,
-                  })
-                }
+                onChange={(e) => setForm({ ...form, costPrice: e.target.value })}
               />
             </Field>
 
@@ -1608,12 +1824,7 @@ function Products({ state, setState, canAdmin }) {
               <input
                 type="number"
                 value={form.stock}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    stock: e.target.value,
-                  })
-                }
+                onChange={(e) => setForm({ ...form, stock: e.target.value })}
               />
             </Field>
 
@@ -1621,12 +1832,7 @@ function Products({ state, setState, canAdmin }) {
               <input
                 type="number"
                 value={form.minStock}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    minStock: e.target.value,
-                  })
-                }
+                onChange={(e) => setForm({ ...form, minStock: e.target.value })}
               />
             </Field>
           </div>
@@ -1634,42 +1840,35 @@ function Products({ state, setState, canAdmin }) {
           <Field label="Descripción">
             <textarea
               value={form.description}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  description: e.target.value,
-                })
-              }
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
           </Field>
 
+          <Field label="Imagen del producto">
+            <input
+              type="file"
+              accept="image/*"
+              onChange={(e) => {
+                const file = e.target.files[0];
 
-<Field label="Imagen del producto">
-  <input
-    type="file"
-    accept="image/*"
-    onChange={(e) =>
-      setForm({
-        ...form,
-        imageFile: e.target.files[0],
-        imagePreview: e.target.files[0]
-  ? URL.createObjectURL(e.target.files[0])
-  : "",
-      })
-    }
-  />
-</Field>
+                if (!file) return;
 
-{form.imagePreview && (
-  <div className="product-image-preview">
-    <img src={form.imagePreview} alt="Vista previa" />
-  </div>
-)}
+                setForm({
+                  ...form,
+                  imageFile: file,
+                  imagePreview: URL.createObjectURL(file),
+                });
+              }}
+            />
+          </Field>
 
-          <button
-            className="primary-btn full"
-            onClick={saveProduct}
-          >
+          {form.imagePreview && (
+            <div className="product-image-preview">
+              <img src={form.imagePreview} alt="Vista previa" />
+            </div>
+          )}
+
+          <button className="primary-btn full" onClick={saveProduct}>
             <Plus size={18} />
             Guardar producto
           </button>
@@ -1689,27 +1888,22 @@ function Products({ state, setState, canAdmin }) {
         <div className="product-table">
           {products.map((p) => (
             <div className="product-row" key={p.id}>
-  <div className="product-info">
-    
-    <div className="product-thumb">
-      {p.image ? (
-        <img src={p.image} alt={p.name} />
-      ) : (
-        <div className="no-image">
-          <Package size={22} />
-        </div>
-      )}
-    </div>
+              <div className="product-info">
+                <div className="product-thumb">
+                  {p.image ? (
+                    <img src={p.image} alt={p.name} />
+                  ) : (
+                    <div className="no-image">
+                      <Package size={22} />
+                    </div>
+                  )}
+                </div>
 
-    <div>
-      <b>{p.name}</b>
-
-      <span>
-        {p.category} · SKU {p.sku}
-      </span>
-    </div>
-
-  </div>
+                <div>
+                  <b>{p.name}</b>
+                  <span>{p.category} · SKU {p.sku}</span>
+                </div>
+              </div>
 
               <div>
                 <span>Venta</span>
@@ -1728,13 +1922,7 @@ function Products({ state, setState, canAdmin }) {
 
               <div>
                 <span>Stock</span>
-                <b
-                  className={
-                    p.stock <= p.minStock
-                      ? "danger-text"
-                      : ""
-                  }
-                >
+                <b className={p.stock <= p.minStock ? "danger-text" : ""}>
                   {p.stock}
                 </b>
               </div>
@@ -1760,250 +1948,709 @@ function Products({ state, setState, canAdmin }) {
           ))}
         </div>
       </Card>
+
+      {editingProduct && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-head">
+              <h2>Editar producto</h2>
+
+              <button
+                className="icon-btn"
+                onClick={() => setEditingProduct(null)}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="form-grid">
+              <Field label="Nombre">
+                <input
+                  value={editForm.name}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, name: e.target.value })
+                  }
+                />
+              </Field>
+
+              <Field label="Categoría">
+                <select
+                  value={editForm.category}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, category: e.target.value })
+                  }
+                >
+                  {categories.map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </select>
+              </Field>
+
+              <Field label="Línea">
+                <input
+                  value={editForm.line}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, line: e.target.value })
+                  }
+                />
+              </Field>
+
+              <Field label="Precio venta">
+                <input
+                  type="number"
+                  value={editForm.salePrice}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, salePrice: e.target.value })
+                  }
+                />
+              </Field>
+
+              <Field label="Costo">
+                <input
+                  type="number"
+                  value={editForm.costPrice}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, costPrice: e.target.value })
+                  }
+                />
+              </Field>
+
+              <Field label="Stock">
+                <input
+                  type="number"
+                  value={editForm.stock}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, stock: e.target.value })
+                  }
+                />
+              </Field>
+
+              <Field label="Stock mínimo">
+                <input
+                  type="number"
+                  value={editForm.minStock}
+                  onChange={(e) =>
+                    setEditForm({ ...editForm, minStock: e.target.value })
+                  }
+                />
+              </Field>
+            </div>
+
+            <Field label="Descripción">
+              <textarea
+                value={editForm.description || ""}
+                onChange={(e) =>
+                  setEditForm({ ...editForm, description: e.target.value })
+                }
+              />
+            </Field>
+
+            <Field label="Cambiar imagen">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files[0];
+
+                  if (!file) return;
+
+                  setEditForm({
+                    ...editForm,
+                    imageFile: file,
+                    imagePreview: URL.createObjectURL(file),
+                  });
+                }}
+              />
+            </Field>
+
+            {editForm.imagePreview && (
+              <div className="product-image-preview">
+                <img src={editForm.imagePreview} alt="Vista previa" />
+              </div>
+            )}
+
+            <div className="modal-actions">
+              <button
+                className="secondary-btn"
+                onClick={() => setEditingProduct(null)}
+              >
+                Cancelar
+              </button>
+
+              <button className="primary-btn" onClick={saveEditProduct}>
+                Guardar cambios
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
 
 function Stock({ state, setState, canAdmin, session }) {
-  async function adjust(product, type) {
-  try {
-    if (!canAdmin) return alert("Solo administrador puede modificar stock.");
+  const [stockModal, setStockModal] = useState(null);
+  const [stockForm, setStockForm] = useState({
+    type: "add",
+    qty: "",
+    reason: "Ingreso de mercadería",
+  });
 
-    const qty = Number(
-      prompt(type === "add" ? "Cantidad a sumar:" : "Nuevo stock correcto:") || 0
-    );
-
-    if (qty < 0) return;
-
-    const reason =
-      prompt(
-        "Motivo del movimiento:",
-        type === "add" ? "Ingreso de mercadería" : "Corrección manual"
-      ) || "";
-
-    const newStock = type === "add" ? Number(product.stock) + qty : qty;
-    const movementQty = type === "add" ? qty : qty - Number(product.stock);
-
-    const { error: errorStock } = await supabase
-      .from("productos")
-      .update({ stock: newStock })
-      .eq("id", product.id);
-
-    if (errorStock) {
-      console.error("ERROR ACTUALIZANDO STOCK:", errorStock);
-      alert(errorStock.message);
+  function openStockModal(product, type) {
+    if (!canAdmin) {
+      toast.error("Solo administrador puede modificar stock.");
       return;
     }
 
-    const { error: errorMovimiento } = await supabase
-      .from("movimientos_stock")
-      .insert([
-        {
-          producto_id: product.id,
-          tipo: type === "add" ? "Ingreso" : "Corrección",
-          cantidad: movementQty,
-          motivo: reason,
-        },
-      ]);
+    setStockModal(product);
 
-    if (errorMovimiento) {
-      console.error("ERROR GUARDANDO MOVIMIENTO:", errorMovimiento);
-      alert(errorMovimiento.message);
-      return;
-    }
-
-    setState((prev) => ({
-      ...prev,
-      products: prev.products.map((p) =>
-        p.id === product.id ? { ...p, stock: newStock } : p
-      ),
-      stockMovements: [
-        {
-          id: uid(),
-          date: today(),
-          productId: product.id,
-          productName: product.name,
-          type: type === "add" ? "Ingreso" : "Corrección",
-          qty: movementQty,
-          reason,
-          user: session.name,
-        },
-        ...prev.stockMovements,
-      ],
-    }));
-
-    alert("Stock actualizado correctamente");
-  } catch (err) {
-    console.error("ERROR GENERAL STOCK:", err);
-    alert("Error general actualizando stock");
+    setStockForm({
+      type,
+      qty: type === "set" ? product.stock : "",
+      reason: type === "add" ? "Ingreso de mercadería" : "Corrección manual",
+    });
   }
-}
+
+  function closeStockModal() {
+    setStockModal(null);
+
+    setStockForm({
+      type: "add",
+      qty: "",
+      reason: "Ingreso de mercadería",
+    });
+  }
+
+  async function saveStockMovement() {
+    try {
+      if (!stockModal) return;
+
+      const product = stockModal;
+      const type = stockForm.type;
+      const qty = Number(stockForm.qty || 0);
+      const reason = stockForm.reason || "";
+
+      if (qty < 0) {
+        toast.error("La cantidad no puede ser negativa.");
+        return;
+      }
+
+      const newStock =
+        type === "add"
+          ? Number(product.stock) + qty
+          : qty;
+
+      const movementQty =
+        type === "add"
+          ? qty
+          : qty - Number(product.stock);
+
+      const { error: errorStock } = await supabase
+        .from("productos")
+        .update({ stock: newStock })
+        .eq("id", product.id);
+
+      if (errorStock) {
+        console.error("ERROR ACTUALIZANDO STOCK:", errorStock);
+        alert(errorStock.message);
+        return;
+      }
+
+      const { error: errorMovimiento } = await supabase
+        .from("movimientos_stock")
+        .insert([
+          {
+            producto_id: product.id,
+            tipo: type === "add" ? "Ingreso" : "Corrección",
+            cantidad: movementQty,
+            motivo: reason,
+          },
+        ]);
+
+      if (errorMovimiento) {
+        console.error("ERROR GUARDANDO MOVIMIENTO:", errorMovimiento);
+        alert(errorMovimiento.message);
+        return;
+      }
+
+      setState((prev) => ({
+        ...prev,
+
+        products: prev.products.map((p) =>
+          p.id === product.id
+            ? { ...p, stock: newStock }
+            : p
+        ),
+
+        stockMovements: [
+          {
+            id: uid(),
+            date: today(),
+            productId: product.id,
+            productName: product.name,
+            type: type === "add" ? "Ingreso" : "Corrección",
+            qty: movementQty,
+            reason,
+            user: session.name,
+          },
+          ...prev.stockMovements,
+        ],
+      }));
+
+      closeStockModal();
+
+      toast.success("Stock actualizado correctamente");
+    } catch (err) {
+      console.error("ERROR GENERAL STOCK:", err);
+      toast.error("Error general actualizando stock");
+    }
+  }
+
   return (
     <section className="page two-columns">
       <Card title="Control de stock">
         {state.products.map((p) => (
           <div className="stock-row" key={p.id}>
-  <div className="stock-product">
-    <div className="stock-image">
-      {p.image ? (
-        <img src={p.image} alt={p.name} />
-      ) : (
-        <Package size={22} />
-      )}
-    </div>
+            <div className="stock-product">
+              <div className="stock-image">
+                {p.image ? (
+                  <img src={p.image} alt={p.name} />
+                ) : (
+                  <Package size={22} />
+                )}
+              </div>
 
-    <div className="stock-info">
-      <b>{p.name}</b>
+              <div className="stock-info">
+                <b>{p.name}</b>
 
-      <span>
-        {p.category} · SKU {p.sku}
-      </span>
-    </div>
-  </div>
+                <span>
+                  {p.category} · SKU {p.sku}
+                </span>
+              </div>
+            </div>
 
-  <div className="stock-values">
-    <div>
-      <small>Actual</small>
-      <b>{p.stock}</b>
-    </div>
+            <div className="stock-values">
+              <div>
+                <small>Actual</small>
+                <b>{p.stock}</b>
+              </div>
 
-    <div>
-      <small>Mínimo</small>
-      <b>{p.minStock}</b>
-    </div>
+              <div>
+                <small>Mínimo</small>
+                <b>{p.minStock}</b>
+              </div>
 
-    <div>
-      <small>Estado</small>
+              <div>
+                <small>Estado</small>
 
-      <b className={p.stock <= p.minStock ? "danger-text" : "success-text"}>
-        {p.stock <= p.minStock ? "Bajo" : "OK"}
-      </b>
-    </div>
-  </div>
-</div>
+                <b className={p.stock <= p.minStock ? "danger-text" : "success-text"}>
+                  {p.stock <= p.minStock ? "Bajo" : "OK"}
+                </b>
+              </div>
+            </div>
+
+            <div className="row-actions">
+              <button
+                className="secondary-btn"
+                onClick={() => openStockModal(p, "add")}
+              >
+                <Plus size={16} />
+                Sumar
+              </button>
+
+              <button
+                className="secondary-btn"
+                onClick={() => openStockModal(p, "set")}
+              >
+                <Edit3 size={16} />
+                Corregir
+              </button>
+            </div>
+          </div>
         ))}
       </Card>
+
       <Card title="Movimientos de stock">
-        {state.stockMovements.length ? state.stockMovements.map((m) => <LineItem key={m.id} left={`${m.date} · ${m.productName}`} right={`${m.qty > 0 ? "+" : ""}${m.qty}`} />) : <Empty text="Todavía no hay movimientos." />}
+        {state.stockMovements.length ? (
+          state.stockMovements.map((m) => (
+            <LineItem
+              key={m.id}
+              left={`${m.date} · ${m.productName}`}
+              right={`${m.qty > 0 ? "+" : ""}${m.qty}`}
+            />
+          ))
+        ) : (
+          <Empty text="Todavía no hay movimientos." />
+        )}
       </Card>
+
+      {stockModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-head">
+              <div>
+                <h2>
+                  {stockForm.type === "add"
+                    ? "Sumar stock"
+                    : "Corregir stock"}
+                </h2>
+
+                <p>{stockModal.name}</p>
+              </div>
+
+              <button
+                className="icon-btn"
+                onClick={closeStockModal}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="total-box">
+              <LineItem
+                left="Stock actual"
+                right={`${stockModal.stock} unidades`}
+              />
+
+              <LineItem
+                left="Stock mínimo"
+                right={`${stockModal.minStock} unidades`}
+              />
+            </div>
+
+            <div className="form-grid">
+              <Field
+                label={
+                  stockForm.type === "add"
+                    ? "Cantidad a sumar"
+                    : "Nuevo stock correcto"
+                }
+              >
+                <input
+                  type="number"
+                  value={stockForm.qty}
+                  onChange={(e) =>
+                    setStockForm({
+                      ...stockForm,
+                      qty: e.target.value,
+                    })
+                  }
+                />
+              </Field>
+
+              <Field label="Tipo de movimiento">
+                <select
+                  value={stockForm.type}
+                  onChange={(e) =>
+                    setStockForm({
+                      ...stockForm,
+                      type: e.target.value,
+                      reason:
+                        e.target.value === "add"
+                          ? "Ingreso de mercadería"
+                          : "Corrección manual",
+                    })
+                  }
+                >
+                  <option value="add">Ingreso / sumar</option>
+                  <option value="set">Corrección manual</option>
+                </select>
+              </Field>
+            </div>
+
+            <Field label="Motivo del movimiento">
+              <textarea
+                value={stockForm.reason}
+                onChange={(e) =>
+                  setStockForm({
+                    ...stockForm,
+                    reason: e.target.value,
+                  })
+                }
+              />
+            </Field>
+
+            <div className="modal-actions">
+              <button
+                className="secondary-btn"
+                onClick={closeStockModal}
+              >
+                Cancelar
+              </button>
+
+              <button
+                className="primary-btn"
+                onClick={saveStockMovement}
+              >
+                Guardar movimiento
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
 
 function Debts({ state, setState }) {
   const debts = state.sales.filter((s) => s.debt > 0);
- async function addPayment(sale) {
-  try {
-    const amount = Number(prompt("Monto que abonó el cliente:") || 0);
 
-    if (!amount || amount <= 0) return;
+  const [paymentModal, setPaymentModal] = useState(null);
+  const [paymentForm, setPaymentForm] = useState({
+    amount: "",
+    method: "Mercado Pago",
+    notes: "Pago registrado",
+  });
 
-    const method =
-      prompt("Método de pago:", "Mercado Pago") || "Mercado Pago";
+  function openPaymentModal(sale) {
+    setPaymentModal(sale);
 
-    const newPaid = Number(sale.paidAmount || 0) + amount;
-
-    const newDebt = Math.max(
-      Number(sale.total || 0) - newPaid,
-      0
-    );
-
-    const newStatus =
-      newDebt === 0 ? "Pagado" : "Parcial";
-
-    // GUARDAR PAGO
-    const { error: errorPago } = await supabase
-      .from("pagos")
-      .insert([
-        {
-          venta_id: sale.id,
-          metodo_pago: method,
-          monto: amount,
-          observaciones: "Pago registrado",
-        },
-      ]);
-
-    if (errorPago) {
-      console.error(errorPago);
-      alert(errorPago.message);
-      return;
-    }
-
-    // ACTUALIZAR VENTA
-    const { error: errorVenta } = await supabase
-      .from("ventas")
-      .update({
-        abonado: newPaid,
-        saldo: newDebt,
-        estado_pago: newStatus,
-      })
-      .eq("id", sale.id);
-
-    if (errorVenta) {
-      console.error(errorVenta);
-      alert(errorVenta.message);
-      return;
-    }
-
-    // ACTUALIZAR FRONT
-    setState((prev) => ({
-      ...prev,
-      sales: prev.sales.map((s) => {
-        if (s.id !== sale.id) return s;
-
-        return {
-          ...s,
-          paidAmount: newPaid,
-          debt: newDebt,
-          paymentStatus: newStatus,
-          payments: [
-            ...(s.payments || []),
-            {
-              id: uid(),
-              date: today(),
-              amount,
-              method,
-              notes: "Pago registrado",
-            },
-          ],
-        };
-      }),
-
-      cashMovements: [
-        {
-          id: uid(),
-          date: today(),
-          type: "Ingreso",
-          concept: `Pago venta #${sale.id}`,
-          method,
-          amount,
-        },
-        ...prev.cashMovements,
-      ],
-    }));
-
-    alert("Pago registrado correctamente");
-
-  } catch (err) {
-    console.error(err);
-    alert("Error general");
+    setPaymentForm({
+      amount: sale.debt || "",
+      method: "Mercado Pago",
+      notes: "Pago registrado",
+    });
   }
-}
+
+  function closePaymentModal() {
+    setPaymentModal(null);
+
+    setPaymentForm({
+      amount: "",
+      method: "Mercado Pago",
+      notes: "Pago registrado",
+    });
+  }
+
+  async function savePayment() {
+    try {
+      if (!paymentModal) return;
+
+      const sale = paymentModal;
+      const amount = Number(paymentForm.amount || 0);
+      const method = paymentForm.method || "Mercado Pago";
+
+      if (!amount || amount <= 0) {
+        toast.error("Ingresá un monto válido.");
+        return;
+      }
+
+      const newPaid = Number(sale.paidAmount || 0) + amount;
+
+      const newDebt = Math.max(
+        Number(sale.total || 0) - newPaid,
+        0
+      );
+
+      const newStatus =
+        newDebt === 0 ? "Pagado" : "Parcial";
+
+      const { error: errorPago } = await supabase
+        .from("pagos")
+        .insert([
+          {
+            venta_id: sale.id,
+            metodo_pago: method,
+            monto: amount,
+            observaciones: paymentForm.notes || "Pago registrado",
+          },
+        ]);
+
+      if (errorPago) {
+        console.error(errorPago);
+        alert(errorPago.message);
+        return;
+      }
+
+      const { error: errorVenta } = await supabase
+        .from("ventas")
+        .update({
+          abonado: newPaid,
+          saldo: newDebt,
+          estado_pago: newStatus,
+        })
+        .eq("id", sale.id);
+
+      if (errorVenta) {
+        console.error(errorVenta);
+        alert(errorVenta.message);
+        return;
+      }
+
+      setState((prev) => ({
+        ...prev,
+
+        sales: prev.sales.map((s) => {
+          if (s.id !== sale.id) return s;
+
+          return {
+            ...s,
+            paidAmount: newPaid,
+            debt: newDebt,
+            paymentStatus: newStatus,
+            payments: [
+              ...(s.payments || []),
+              {
+                id: uid(),
+                date: today(),
+                amount,
+                method,
+                notes: paymentForm.notes || "Pago registrado",
+              },
+            ],
+          };
+        }),
+
+        cashMovements: [
+          {
+            id: uid(),
+            date: today(),
+            type: "Ingreso",
+            concept: `Pago venta #${sale.id}`,
+            method,
+            amount,
+          },
+          ...prev.cashMovements,
+        ],
+      }));
+
+      closePaymentModal();
+
+      toast.success("Pago registrado correctamente");
+    } catch (err) {
+      console.error(err);
+      toast.error("Error general registrando pago");
+    }
+  }
 
   return (
     <section className="page">
       <Card title="Deudas y cuotas pendientes">
-        {debts.length ? debts.map((s) => (
-          <div className="debt-row" key={s.id}>
-            <div>
-              <b>{s.clientName}</b>
-              <span>Venta #{s.id} · vencimiento {s.dueDate} · {s.installments} cuota/s</span>
+        {debts.length ? (
+          debts.map((s) => (
+            <div className="debt-row" key={s.id}>
+              <div>
+                <b>{s.clientName}</b>
+
+                <span>
+                  Venta #{s.id} · vencimiento {s.dueDate} · {s.installments} cuota/s
+                </span>
+              </div>
+
+              <b className="danger-text">{money(s.debt)}</b>
+
+              <button
+                className="success-btn"
+                onClick={() => openPaymentModal(s)}
+              >
+                Registrar pago
+              </button>
             </div>
-            <b className="danger-text">{money(s.debt)}</b>
-            <button className="success-btn" onClick={() => addPayment(s)}>Registrar pago</button>
-          </div>
-        )) : <Empty text="No hay deudas pendientes." />}
+          ))
+        ) : (
+          <Empty text="No hay deudas pendientes." />
+        )}
       </Card>
+
+      {paymentModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <div className="modal-head">
+              <div>
+                <h2>Registrar pago</h2>
+                <p>
+                  Venta #{paymentModal.id} · {paymentModal.clientName}
+                </p>
+              </div>
+
+              <button
+                className="icon-btn"
+                onClick={closePaymentModal}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="total-box">
+              <LineItem
+                left="Total venta"
+                right={money(paymentModal.total)}
+              />
+
+              <LineItem
+                left="Ya abonado"
+                right={money(paymentModal.paidAmount)}
+              />
+
+              <LineItem
+                left="Saldo pendiente"
+                right={money(paymentModal.debt)}
+                danger
+                strong
+              />
+            </div>
+
+            <div className="form-grid">
+              <Field label="Monto abonado">
+                <input
+                  type="number"
+                  value={paymentForm.amount}
+                  onChange={(e) =>
+                    setPaymentForm({
+                      ...paymentForm,
+                      amount: e.target.value,
+                    })
+                  }
+                />
+              </Field>
+
+              <Field label="Método de pago">
+                <select
+                  value={paymentForm.method}
+                  onChange={(e) =>
+                    setPaymentForm({
+                      ...paymentForm,
+                      method: e.target.value,
+                    })
+                  }
+                >
+                  {paymentMethods.map((m) => (
+                    <option key={m}>{m}</option>
+                  ))}
+                </select>
+              </Field>
+            </div>
+
+            <Field label="Observaciones">
+              <textarea
+                value={paymentForm.notes}
+                onChange={(e) =>
+                  setPaymentForm({
+                    ...paymentForm,
+                    notes: e.target.value,
+                  })
+                }
+              />
+            </Field>
+
+            <div className="modal-actions">
+              <button
+                className="secondary-btn"
+                onClick={closePaymentModal}
+              >
+                Cancelar
+              </button>
+
+              <button
+                className="primary-btn"
+                onClick={savePayment}
+              >
+                Guardar pago
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -2020,7 +2667,7 @@ function Cash({ state, setState }) {
   try {
     console.log("ENTRÓ A SAVE MOVEMENT SUPABASE");
     if (!form.concept || !form.amount) {
-      alert("Completá concepto e importe.");
+      toast.error("Completá concepto e importe.");
       return;
     }
 
@@ -2037,7 +2684,7 @@ function Cash({ state, setState }) {
 
     if (error) {
       console.error("ERROR CAJA:", error);
-      alert(error.message);
+      toast.error(error.message);
       return;
     }
 
@@ -2063,11 +2710,11 @@ function Cash({ state, setState }) {
       amount: "",
     });
 
-    alert("Movimiento de caja guardado correctamente");
+    toast.success("Movimiento de caja guardado correctamente");
 
   } catch (err) {
     console.error(err);
-    alert("Error general guardando caja");
+    toast.error("Error general guardando caja");
   }
 }
 
@@ -2107,7 +2754,7 @@ function Shipping({ state, setState }) {
 
       if (error) {
         console.error("ERROR ACTUALIZANDO ENVÍO:", error);
-        alert(error.message);
+        toast.error(error.message);
         return;
       }
 
@@ -2128,7 +2775,7 @@ function Shipping({ state, setState }) {
       }));
     } catch (err) {
       console.error("ERROR GENERAL ENVÍO:", err);
-      alert("Error general actualizando envío");
+      toast.error("Error general actualizando envío");
     }
   }
 
@@ -2361,15 +3008,15 @@ function Reports({ state }) {
 function UsersAdmin({ state, setState, isSuperAdmin }) {
   const [form, setForm] = useState({ name: "", username: "", password: "", role: "vendedor" });
   function saveUser() {
-    if (!isSuperAdmin) return alert("Solo el Super Admin puede crear usuarios.");
-    if (!form.name || !form.username || !form.password) return alert("Completá todos los datos.");
-    if (state.users.some((u) => u.username === form.username)) return alert("Ese usuario ya existe.");
+    if (!isSuperAdmin) return toast.error("Solo el Super Admin puede crear usuarios.");
+    if (!form.name || !form.username || !form.password) return toast.error("Completá todos los datos.");
+    if (state.users.some((u) => u.username === form.username)) return toast.error("Ese usuario ya existe.");
     setState((prev) => ({ ...prev, users: [{ id: uid(), ...form, active: true }, ...prev.users] }));
     setForm({ name: "", username: "", password: "", role: "vendedor" });
   }
   function toggleUser(user) {
-    if (!isSuperAdmin) return alert("Solo el Super Admin puede modificar usuarios.");
-    if (user.role === "superadmin") return alert("No se puede desactivar el Super Admin principal.");
+    if (!isSuperAdmin) return toast.error("Solo el Super Admin puede modificar usuarios.");
+    if (user.role === "superadmin") return toast.error("No se puede desactivar el Super Admin principal.");
     setState((prev) => ({ ...prev, users: prev.users.map((u) => u.id === user.id ? { ...u, active: !u.active } : u) }));
   }
   return (
