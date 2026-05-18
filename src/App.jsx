@@ -429,9 +429,6 @@ function Dashboard({ state, setPage }) {
 
 function NewSale({ state, setState, setPage, session }) {
   const [query, setQuery] = useState("");
-  const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState("");
-  const [query, setQuery] = useState("");
   const [clientId, setClientId] = useState(state.clients[0]?.id || "");
   const [channel, setChannel] = useState("Instagram");
   const [paymentMethod, setPaymentMethod] = useState("Mercado Pago");
@@ -1605,34 +1602,7 @@ function Products({ state, setState, canAdmin }) {
               />
             </Field>
           </div>
-<Field label="Imagen del producto">
-  <input
-    type="file"
-    accept="image/*"
-    onChange={(e) => {
-      const file = e.target.files[0];
 
-      if (!file) return;
-
-      setImageFile(file);
-      setImagePreview(URL.createObjectURL(file));
-    }}
-  />
-
-  {imagePreview && (
-    <img
-      src={imagePreview}
-      alt="preview"
-      style={{
-        width: "100%",
-        maxHeight: "220px",
-        objectFit: "cover",
-        borderRadius: "16px",
-        marginTop: "10px",
-      }}
-    />
-  )}
-</Field>
           <Field label="Descripción">
             <textarea
               value={form.description}
@@ -1644,7 +1614,9 @@ function Products({ state, setState, canAdmin }) {
               }
             />
           </Field>
-          <Field label="Imagen del producto">
+
+
+<Field label="Imagen del producto">
   <input
     type="file"
     accept="image/*"
