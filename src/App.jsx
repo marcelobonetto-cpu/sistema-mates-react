@@ -677,37 +677,27 @@ function NewSale({ state, setState, setPage, session }) {
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar por producto, categoría o SKU..." />
         </div>
 
-        <div className="product-list">
+   <div className="product-list sale-product-list">
   {filteredProducts.map((p) => (
     <button
-      className="product-card premium-product-card"
+      type="button"
+      className="product-card sale-product-card"
       key={p.id}
       onClick={() => addToCart(p)}
     >
-      <div className="product-card-left">
-        <img
-          src={
-            p.image ||
-"https://placehold.co/120x120/111/FFF?text=Mate"
-          }
-          alt={p.name}
-          className="product-thumb"
-        />
+      <div className="sale-product-left">
+        <div className="sale-product-img">
+          {p.image ? (
+            <img src={p.image} alt={p.name} />
+          ) : (
+            <Package size={24} />
+          )}
+        </div>
 
-        <div className="product-data">
+        <div className="sale-product-info">
           <b>{p.name}</b>
-
-          <span>
-            {p.category} · {p.sku}
-          </span>
-
-          <small
-            className={
-              p.stock <= p.minStock
-                ? "danger-text"
-                : ""
-            }
-          >
+          <span>{p.category} · {p.sku}</span>
+          <small className={p.stock <= p.minStock ? "danger-text" : ""}>
             Stock disponible: {p.stock}
           </small>
         </div>
@@ -1853,16 +1843,44 @@ function Stock({ state, setState, canAdmin, session }) {
       <Card title="Control de stock">
         {state.products.map((p) => (
           <div className="stock-row" key={p.id}>
-            <div>
-              <b>{p.name}</b>
-              <span>{p.sku} · mínimo {p.minStock}</span>
-            </div>
-            <b className={p.stock <= p.minStock ? "danger-text" : "success-text"}>{p.stock} unidades</b>
-            <div className="row-actions">
-              <button onClick={() => adjust(p, "add")}><Plus size={16} /> Sumar</button>
-              <button onClick={() => adjust(p, "set")}><Edit3 size={16} /> Corregir</button>
-            </div>
-          </div>
+  <div className="stock-product">
+    <div className="stock-image">
+      {p.image ? (
+        <img src={p.image} alt={p.name} />
+      ) : (
+        <Package size={22} />
+      )}
+    </div>
+
+    <div className="stock-info">
+      <b>{p.name}</b>
+
+      <span>
+        {p.category} · SKU {p.sku}
+      </span>
+    </div>
+  </div>
+
+  <div className="stock-values">
+    <div>
+      <small>Actual</small>
+      <b>{p.stock}</b>
+    </div>
+
+    <div>
+      <small>Mínimo</small>
+      <b>{p.minStock}</b>
+    </div>
+
+    <div>
+      <small>Estado</small>
+
+      <b className={p.stock <= p.minStock ? "danger-text" : "success-text"}>
+        {p.stock <= p.minStock ? "Bajo" : "OK"}
+      </b>
+    </div>
+  </div>
+</div>
         ))}
       </Card>
       <Card title="Movimientos de stock">
