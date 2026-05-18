@@ -57,11 +57,6 @@ function loadState() {
 
 export default function App() {
   const [state, setState] = useState(loadState);
-
-  const [theme, setTheme] = useState(() => {
-    return localStorage.getItem("sistema_mates_theme") || "theme-darkgold";
-  });
-
   const [session, setSession] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("sistema_mates_session")) || null;
@@ -96,17 +91,6 @@ export default function App() {
     if (session) localStorage.setItem("sistema_mates_session", JSON.stringify(session));
     else localStorage.removeItem("sistema_mates_session");
   }, [session]);
-  useEffect(() => {
-  document.body.classList.remove(
-    "theme-darkgold",
-    "theme-lightblue",
-    "theme-emerald",
-    "theme-purple"
-  );
-
-  document.body.classList.add(theme);
-  localStorage.setItem("sistema_mates_theme", theme);
-}, [theme]);
 useEffect(() => {
   async function cargarDatosSupabase() {
     const { data: productos, error: errorProductos } = await supabase
@@ -310,53 +294,13 @@ function login(username, password) {
 
       <main className="main">
         <header className="topbar">
-  <button
-    className="icon-btn only-mobile"
-    onClick={() => setSidebarOpen(true)}
-  >
-    <Menu />
-  </button>
-
-  <div>
-    <h2>{pageTitle(page)}</h2>
-    <p>
-      Usuario activo: {session.name} ·{" "}
-      {roleLabel(session.role)}
-    </p>
-  </div>
-
-  <div className="topbar-actions">
-    <select
-      className="theme-select"
-      value={theme}
-      onChange={(e) => setTheme(e.target.value)}
-    >
-      <option value="theme-darkgold">
-        Dark Gold
-      </option>
-
-      <option value="theme-lightblue">
-        Light Blue
-      </option>
-
-      <option value="theme-emerald">
-        Emerald
-      </option>
-
-      <option value="theme-purple">
-        Midnight Purple
-      </option>
-    </select>
-
-    <button
-      className="primary-btn"
-      onClick={() => setPage("new-sale")}
-    >
-      <Plus size={18} />
-      Nueva venta
-    </button>
-  </div>
-</header>
+          <button className="icon-btn only-mobile" onClick={() => setSidebarOpen(true)}><Menu /></button>
+          <div>
+            <h2>{pageTitle(page)}</h2>
+            <p>Usuario activo: {session.name} · {roleLabel(session.role)}</p>
+          </div>
+          <button className="primary-btn" onClick={() => setPage("new-sale")}><Plus size={18} /> Nueva venta</button>
+        </header>
 
         {page === "dashboard" && <Dashboard state={state} setPage={setPage} />}
         {page === "new-sale" && <NewSale state={state} setState={setState} setPage={setPage} session={session} />}
@@ -484,6 +428,9 @@ function Dashboard({ state, setPage }) {
 }
 
 function NewSale({ state, setState, setPage, session }) {
+  const [query, setQuery] = useState("");
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState("");
   const [query, setQuery] = useState("");
   const [clientId, setClientId] = useState(state.clients[0]?.id || "");
   const [channel, setChannel] = useState("Instagram");
@@ -1355,6 +1302,27 @@ function Products({ state, setState, canAdmin }) {
 
   const [form, setForm] = useState(emptyProduct);
   const [query, setQuery] = useState("");
+  async function uploadImage(file) {
+  if (!file) return "";
+
+  const fileName = `${Date.now()}-${file.name}`;
+
+  const { error } = await supabase.storage
+    .from("productos")
+    .upload(fileName, file);
+
+  if (error) {
+    console.error(error);
+    alert("Error subiendo imagen");
+    return "";
+  }
+
+  const { data } = supabase.storage
+    .from("productos")
+    .getPublicUrl(fileName);
+
+  return data.publicUrl;
+}
 
   async function saveProduct() {
     try {
@@ -1369,6 +1337,7 @@ function Products({ state, setState, canAdmin }) {
         .replace("Í", "I");
 
       const sku = `${prefix}-${String(state.products.length + 1).padStart(3, "0")}`;
+      const imageUrl = await uploadImage(form.imageFile);
 
       const nuevoProducto = {
         nombre: form.name,
@@ -1379,7 +1348,7 @@ function Products({ state, setState, canAdmin }) {
         stock: Number(form.stock || 0),
         stock_minimo: Number(form.minStock || 0),
         sku: sku,
-        imagen_url: "",
+        imagen_url: imageUrl,
         activo: true,
       };
 
@@ -1636,7 +1605,34 @@ function Products({ state, setState, canAdmin }) {
               />
             </Field>
           </div>
+<Field label="Imagen del producto">
+  <input
+    type="file"
+    accept="image/*"
+    onChange={(e) => {
+      const file = e.target.files[0];
 
+      if (!file) return;
+
+      setImageFile(file);
+      setImagePreview(URL.createObjectURL(file));
+    }}
+  />
+
+  {imagePreview && (
+    <img
+      src={imagePreview}
+      alt="preview"
+      style={{
+        width: "100%",
+        maxHeight: "220px",
+        objectFit: "cover",
+        borderRadius: "16px",
+        marginTop: "10px",
+      }}
+    />
+  )}
+</Field>
           <Field label="Descripción">
             <textarea
               value={form.description}
@@ -1648,6 +1644,25 @@ function Products({ state, setState, canAdmin }) {
               }
             />
           </Field>
+          <Field label="Imagen del producto">
+  <input
+    type="file"
+    accept="image/*"
+    onChange={(e) =>
+      setForm({
+        ...form,
+        imageFile: e.target.files[0],
+        imagePreview: URL.createObjectURL(e.target.files[0]),
+      })
+    }
+  />
+</Field>
+
+{form.imagePreview && (
+  <div className="product-image-preview">
+    <img src={form.imagePreview} alt="Vista previa" />
+  </div>
+)}
 
           <button
             className="primary-btn full"
@@ -1672,12 +1687,27 @@ function Products({ state, setState, canAdmin }) {
         <div className="product-table">
           {products.map((p) => (
             <div className="product-row" key={p.id}>
-              <div>
-                <b>{p.name}</b>
-                <span>
-                  {p.category} · SKU {p.sku}
-                </span>
-              </div>
+  <div className="product-info">
+    
+    <div className="product-thumb">
+      {p.image ? (
+        <img src={p.image} alt={p.name} />
+      ) : (
+        <div className="no-image">
+          <Package size={22} />
+        </div>
+      )}
+    </div>
+
+    <div>
+      <b>{p.name}</b>
+
+      <span>
+        {p.category} · SKU {p.sku}
+      </span>
+    </div>
+
+  </div>
 
               <div>
                 <span>Venta</span>
@@ -2376,27 +2406,9 @@ function getSummary(state) {
 }
 
 function getTopProducts(sales) {
-  const validSales = sales.filter(
-    (s) =>
-      s.orderStatus !== "Cancelado" &&
-      s.paymentStatus !== "Cancelado"
-  );
-
-  const productsMap = {};
-
-  validSales.forEach((sale) => {
-    (sale.items || []).forEach((item) => {
-      if (!productsMap[item.name]) {
-        productsMap[item.name] = 0;
-      }
-
-      productsMap[item.name] += Number(item.qty || 0);
-    });
-  });
-
-  return Object.entries(productsMap).sort(
-    (a, b) => b[1] - a[1]
-  );
+  const map = {};
+  sales.forEach((s) => s.items.forEach((i) => { map[i.name] = (map[i.name] || 0) + i.qty; }));
+  return Object.entries(map).sort((a, b) => b[1] - a[1]);
 }
 
 function NavButton({ icon, label, active, onClick }) {
